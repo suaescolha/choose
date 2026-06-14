@@ -59,8 +59,24 @@
       });
     }
 
-    function vibrarN(n, onDone) {
+    // Fila de vibrações — garante que uma espera a outra terminar
+    const filaVibracao = [];
+    let vibrandoAgora = false;
+
+    function vibrarN(n) {
       if (!n || n < 1 || n > 20) return;
+      filaVibracao.push(n);
+      if (!vibrandoAgora) processarFila();
+    }
+
+    function processarFila() {
+      if (filaVibracao.length === 0) {
+        vibrandoAgora = false;
+        return;
+      }
+      vibrandoAgora = true;
+      const n = filaVibracao.shift();
+
       const pulso  = 380;
       const pausa  = 230;
       const padrao = [];
@@ -69,19 +85,19 @@
         if (i < n - 1) padrao.push(pausa);
       }
       navigator.vibrate && navigator.vibrate(padrao);
-      if (onDone) {
-        const total = pulso * n + pausa * (n - 1);
-        setTimeout(onDone, total);
-      }
+
+      const total = pulso * n + pausa * (n - 1);
 
       // Mostra contagem na tela do receptor
       const pulsoEl = document.getElementById("pulso-receptor");
       if (pulsoEl) {
         document.getElementById("contagem").textContent = n;
         pulsoEl.style.display = "flex";
-        const total = pulso * n + pausa * (n - 1);
-        setTimeout(() => { pulsoEl.style.display = "none"; }, total + 600);
+        setTimeout(() => { pulsoEl.style.display = "none"; }, total + 300);
       }
+
+      // Aguarda terminar antes de processar o próximo
+      setTimeout(processarFila, total + 500);
     }
 
     // ════════════════════════════════════════════════════════════
