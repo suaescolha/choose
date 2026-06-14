@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thumper</title>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // ============================================================
+    //  🔧 CONFIGURAÇÃO — substitua pelos seus dados do Firebase
+    // ============================================================
+    const firebaseConfig = {
+      apiKey:            "SUA_API_KEY",
+      authDomain:        "SEU_PROJETO.firebaseapp.com",
+      databaseURL:       "https://SEU_PROJETO-default-rtdb.firebaseio.com",
+      projectId:         "SEU_PROJETO",
+      storageBucket:     "SEU_PROJETO.appspot.com",
+      messagingSenderId: "SEU_SENDER_ID",
+      appId:             "SEU_APP_ID"
+    };
+    // ============================================================
+
+    const app  = initializeApp(firebaseConfig);
+    const db   = getDatabase(app);
+    const ROOT = ref(db, "thumper/sinal");
+
+    // ── Modo detectado pelo URL ──────────────────────────────────
+    // ?modo=receptor  →  celular do mágico
+    // qualquer outro  →  dispositivo do espectador
+    const params   = new URLSearchParams(location.search);
+    const isReceptor = params.get("modo") === "receptor";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      if (isReceptor) initReceptor(db, ROOT);
+      else            initEspectador(db, ROOT);
+    });
+
+    // ════════════════════════════════════════════════════════════
+    //  RECEPTOR  (celular do mágico)
+    // ════════════════════════════════════════════════════════════
+    function initReceptor(db, ROOT) {
+      document.body.classList.add("modo-receptor");
+      document.getElementById("titulo").textContent = "Receptor ativo";
+      document.getElementById("subtitulo").textContent = "Aguardando sinal…";
+
+      const statusEl = document.getElementById("status-receptor");
+      const pulsoEl  = document.getElementById("pulso-receptor");
+      statusEl.style.display = "flex";
+
+      let ultimoTimestamp = null;
+
+      onValue(ROOT, (snap) => {
+        const dados = snap.val();
+        if (!dados || dados.ts === ultimoTimestamp) return;
+        ultimoTimestamp = dados.ts;
+
+        const n = dados.valor;
+        if (!n || n < 1 || n > 20) return;
+
+        document.getElementById("contagem").textContent = n;
+        pulsoEl.style.display = "flex";
+
+        vibrarN(n, () => {
+          setTimeout(() => { pulsoEl.style.display = "none"; }, 800);
+        });
+      });
+    }
+
+    function vibrarN(n, onDone) {
+      // padrão: 350ms vibra, 220ms pausa
+      const pulso   = 350;
+      const pausa   = 220;
+      const padrao  = [];
+      for (let i = 0; i < n; i++) {
+        padrao.push(pulso);
+        if (i < n - 1) padrao.push(pausa);
+      }
+      navigator.vibrate && navigator.vibrate(padrao);
+      const total = pulso * n + pausa * (n - 1);
+      setTimeout(onDone, total);
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  ESPECTADOR  (dispositivo da plateia)
+    // ════════════════════════════════════════════════════════════
+    function initEspectador(db, ROOT) {
+      document.body.classList.add("modo-espectador");
+      document.getElementById("titulo").textContent = "Escolha um objeto";
+      document.getElementById("subtitulo").textContent =
+        "Selecione uma categoria e toque no item desejado";
+
+      renderCategorias();
+
+      document.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach(t => t.classList.remove("ativo"));
+          tab.classList.add("ativo");
+          renderGrid(tab.dataset.cat);
+        });
+      });
+    }
+
+    const CATEGORIAS = {
+      dado: {
+        label: "Dado",
+        emoji: "🎲",
+        itens: [
+          { label: "1", valor: 1, emoji: "⚀" },
+          { label: "2", valor: 2, emoji: "⚁" },
+          { label: "3", valor: 3, emoji: "⚂" },
+          { label: "4", valor: 4, emoji: "⚃" },
+          { label: "5", valor: 5, emoji: "⚄" },
+          { label: "6", valor: 6, emoji: "⚅" },
+        ]
+      },
+      baralho: {
+        label: "Baralho",
+        emoji: "🃏",
+        itens: [
+          { label: "Ás",    valor: 1,  emoji: "🂡" },
+          { label: "2",     valor: 2,  emoji: "2" },
+          { label: "3",     valor: 3,  emoji: "3" },
+          { label: "4",     valor: 4,  emoji: "4" },
+          { label: "5",     valor: 5,  emoji: "5" },
+          { label: "6",     valor: 6,  emoji: "6" },
+          { label: "7",     valor: 7,  emoji: "7" },
+          { label: "8",     valor: 8,  emoji: "8" },
+          { label: "9",     valor: 9,  emoji: "9" },
+          { label: "10",    valor: 10, emoji: "10" },
+          { label: "Valete",valor: 11, emoji: "J" },
+          { label: "Dama",  valor: 12, emoji: "Q" },
+          { label: "Rei",   valor: 13, emoji: "K" },
+        ]
+      },
+      numero: {
+        label: "Número",
+        emoji: "🔢",
+        itens: Array.from({ length: 10 }, (_, i) => ({
+          label: String(i + 1), valor: i + 1, emoji: String(i + 1)
+        }))
+      }
+    };
+
+    function renderCategorias() {
+      const tabs = document.getElementById("tabs");
+      tabs.innerHTML = "";
+      Object.entries(CATEGORIAS).forEach(([key, cat], idx) => {
+        const btn = document.createElement("button");
+        btn.className = "tab" + (idx === 0 ? " ativo" : "");
+        btn.dataset.cat = key;
+        btn.innerHTML = `${cat.emoji} ${cat.label}`;
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach(t => t.classList.remove("ativo"));
+          btn.classList.add("ativo");
+          renderGrid(key);
+        });
+        tabs.appendChild(btn);
+      });
+      renderGrid(Object.keys(CATEGORIAS)[0]);
+    }
+
+    function renderGrid(catKey) {
+      const cat  = CATEGORIAS[catKey];
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      cat.itens.forEach(item => {
+        const btn = document.createElement("button");
+        btn.className = "item-btn";
+        btn.innerHTML = `<span class="item-emoji">${item.emoji}</span><span class="item-label">${item.label}</span>`;
+        btn.addEventListener("click", () => enviar(item.valor, btn));
+        grid.appendChild(btn);
+      });
+    }
+
+    function enviar(valor, btnEl) {
+      set(ROOT, { valor, ts: Date.now() });
+
+      // feedback visual
+      document.querySelectorAll(".item-btn").forEach(b => b.classList.remove("enviado"));
+      btnEl.classList.add("enviado");
+      document.getElementById("feedback").textContent = `✓ Enviado: ${valor}`;
+      setTimeout(() => {
+        document.getElementById("feedback").textContent = "";
+        btnEl.classList.remove("enviado");
+      }, 2000);
+    }
+  </script>
+
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0a0f;
+      --surface:  #13131a;
+      --border:   #1e1e2e;
+      --accent:   #7c3aed;
+      --accent2:  #a855f7;
+      --pulse:    #c084fc;
+      --text:     #e2e0f0;
+      --muted:    #6b6880;
+      --success:  #22c55e;
+      --radius:   14px;
+      --font:     'Inter', system-ui, sans-serif;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100dvh;
+      padding: 0 16px 32px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────── */
+    header {
+      width: 100%;
+      max-width: 480px;
+      padding: 40px 0 24px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 11px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 10px;
+    }
+
+    #titulo {
+      font-size: clamp(22px, 5vw, 30px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+    }
+
+    #subtitulo {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* ── Main ─────────────────────────────────────────────────── */
+    main {
+      width: 100%;
+      max-width: 480px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Tabs ─────────────────────────────────────────────────── */
+    #tabs {
+      display: flex;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px;
+    }
+
+    .tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 9px 6px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background .18s, color .18s;
+      font-family: var(--font);
+    }
+
+    .tab.ativo {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Grid ─────────────────────────────────────────────────── */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 10px;
+    }
+
+    .item-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 8px;
+      gap: 6px;
+      cursor: pointer;
+      transition: border-color .18s, background .18s, transform .12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .item-btn:active { transform: scale(.94); }
+
+    .item-btn:hover {
+      border-color: var(--accent);
+      background: #1a1025;
+    }
+
+    .item-btn.enviado {
+      border-color: var(--success);
+      background: #0d2016;
+    }
+
+    .item-emoji {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .item-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    /* ── Feedback ─────────────────────────────────────────────── */
+    #feedback {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--success);
+      min-height: 20px;
+      transition: opacity .3s;
+    }
+
+    /* ── RECEPTOR ─────────────────────────────────────────────── */
+    #status-receptor {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      flex: 1;
+    }
+
+    .orb {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, var(--accent2), var(--accent) 60%, #3b0764);
+      box-shadow: 0 0 40px 8px rgba(124, 58, 237, .35);
+      animation: breathe 3s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1);    box-shadow: 0 0 40px 8px rgba(124,58,237,.35); }
+      50%       { transform: scale(1.07); box-shadow: 0 0 60px 16px rgba(124,58,237,.5); }
+    }
+
+    .status-label {
+      font-size: 13px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Pulso ativo */
+    #pulso-receptor {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(124, 58, 237, .08);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      animation: flash .35s ease-out;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    @keyframes flash {
+      0%   { background: rgba(124,58,237,.28); }
+      100% { background: rgba(124,58,237,.06); }
+    }
+
+    #contagem {
+      font-size: 96px;
+      font-weight: 700;
+      letter-spacing: -.04em;
+      color: var(--pulse);
+      line-height: 1;
+      text-shadow: 0 0 40px var(--accent2);
+    }
+
+    .pulso-label {
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    /* ── Link de modo ─────────────────────────────────────────── */
+    .modo-link {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .modo-link a {
+      color: var(--accent2);
+      text-decoration: none;
+    }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    footer {
+      margin-top: 32px;
+      font-size: 11px;
+      color: #2e2c3a;
+      text-align: center;
+      letter-spacing: .05em;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <p class="logo">Mentalismo · Thumper</p>
+    <h1 id="titulo">Carregando…</h1>
+    <p id="subtitulo"></p>
+  </header>
+
+  <main>
+    <!-- ESPECTADOR: tabs + grid -->
+    <div id="tabs"></div>
+    <div id="grid"></div>
+    <p id="feedback"></p>
+
+    <!-- RECEPTOR: orb + pulso -->
+    <div id="status-receptor">
+      <div class="orb"></div>
+      <p class="status-label">Aguardando sinal</p>
+    </div>
+
+    <div id="pulso-receptor">
+      <div id="contagem">–</div>
+      <p class="pulso-label">pulsos</p>
+    </div>
+
+    <p class="modo-link">
+      <!-- Links de conveniência — troque pela URL real do seu GitHub Pages -->
+      Abrir como
+      <a href="?modo=receptor">receptor (seu celular)</a> ·
+      <a href="?">espectador</a>
+    </p>
+  </main>
+
+  <footer>thumper · firebase realtime</footer>
+</body>
+</html>
