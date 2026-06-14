@@ -48,6 +48,8 @@
           document.getElementById("btn-ativar").style.display = "none";
           document.getElementById("receptor-ativo").style.display = "flex";
 
+          // Libera o pulso agora que está ativo
+          document.getElementById("pulso-receptor").style.cssText = "";
           // Só começa a escutar DEPOIS que o Firebase foi limpo
           const canais = {
             "thumper/valor":  null,
@@ -648,7 +650,7 @@
       <div class="orb"></div>
       <p class="orb-label">Aguardando</p>
     </div>
-    <div id="pulso-receptor">
+    <div id="pulso-receptor" style="display:none!important">
       <div id="contagem">–</div>
       <p class="pulso-label">pulsos</p>
     </div>
