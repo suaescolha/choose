@@ -7,7 +7,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getDatabase, ref, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
     // ============================================================
     //  🔧 CONFIGURAÇÃO — substitua pelos seus dados do Firebase
@@ -40,6 +40,13 @@
     function initReceptor() {
       document.getElementById("app-espectador").style.display = "none";
       document.getElementById("app-receptor").style.display   = "flex";
+
+      document.getElementById("btn-ativar").addEventListener("click", () => {
+        remove(ref(db, "thumper"));
+        navigator.vibrate && navigator.vibrate(100);
+        document.getElementById("btn-ativar").style.display = "none";
+        document.getElementById("receptor-ativo").style.display = "flex";
+      });
 
       let tsValor = null;
       let tsNaipe = null;
@@ -547,6 +554,25 @@
       gap: 28px;
     }
 
+    #btn-ativar {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 18px;
+      font-weight: 600;
+      padding: 20px 48px;
+      border-radius: 16px;
+      cursor: pointer;
+      letter-spacing: .04em;
+      box-shadow: 0 0 32px rgba(109,40,217,.5);
+      transition: transform .1s, box-shadow .2s;
+    }
+
+    #btn-ativar:active {
+      transform: scale(.95);
+    }
+
     .orb {
       width: 140px;
       height: 140px;
@@ -618,8 +644,11 @@
 
   <!-- RECEPTOR -->
   <div id="app-receptor">
-    <div class="orb"></div>
-    <p class="orb-label">Aguardando</p>
+    <button id="btn-ativar">Ativar</button>
+    <div id="receptor-ativo" style="display:none; flex-direction:column; align-items:center; gap:28px;">
+      <div class="orb"></div>
+      <p class="orb-label">Aguardando</p>
+    </div>
     <div id="pulso-receptor">
       <div id="contagem">–</div>
       <p class="pulso-label">pulsos</p>
