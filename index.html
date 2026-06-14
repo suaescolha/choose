@@ -42,29 +42,28 @@
       document.getElementById("app-receptor").style.display   = "flex";
 
       document.getElementById("btn-ativar").addEventListener("click", () => {
-        remove(ref(db, "thumper"));
-        navigator.vibrate && navigator.vibrate(100);
-        document.getElementById("btn-ativar").style.display = "none";
-        document.getElementById("receptor-ativo").style.display = "flex";
-      });
+        // Primeiro limpa o Firebase
+        remove(ref(db, "thumper")).then(() => {
+          navigator.vibrate && navigator.vibrate(100);
+          document.getElementById("btn-ativar").style.display = "none";
+          document.getElementById("receptor-ativo").style.display = "flex";
 
-      let tsValor = null;
-      let tsNaipe = null;
+          // Só começa a escutar DEPOIS que o Firebase foi limpo
+          const canais = {
+            "thumper/valor":  null,
+            "thumper/naipe":  null,
+            "thumper/dado":   null,
+            "thumper/numero": null,
+          };
 
-      const canais = {
-        "thumper/valor":  null,
-        "thumper/naipe":  null,
-        "thumper/dado":   null,
-        "thumper/numero": null,
-
-      };
-
-      Object.keys(canais).forEach(canal => {
-        onValue(ref(db, canal), (snap) => {
-          const d = snap.val();
-          if (!d || d.ts === canais[canal]) return;
-          canais[canal] = d.ts;
-          vibrarN(d.valor);
+          Object.keys(canais).forEach(canal => {
+            onValue(ref(db, canal), (snap) => {
+              const d = snap.val();
+              if (!d || d.ts === canais[canal]) return;
+              canais[canal] = d.ts;
+              vibrarN(d.valor);
+            });
+          });
         });
       });
     }
