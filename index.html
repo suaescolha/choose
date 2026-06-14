@@ -179,7 +179,6 @@
         const key = btn.dataset.key;
         if (usadas[key]) {
           btn.classList.add("usada");
-          btn.classList.remove("ativo");
           // Mostra o que foi escolhido dentro da tab
           if (escolhas[key]) {
             const spanTexto = btn.querySelector("span:last-child");
@@ -187,19 +186,10 @@
           }
         }
       });
-      // Se a tab ativa foi bloqueada, vai pra próxima disponível
-      if (usadas[tabAtiva]) {
-        const proxima = ["baralho","dado","numero"].find(k => !usadas[k]);
-        if (proxima) {
-          tabAtiva = proxima;
-          const btn = document.querySelector(`.tab[data-key="${proxima}"]`);
-          if (btn) btn.classList.add("ativo");
-          renderConteudo(proxima);
-        } else {
-          // Tudo usado
-          renderTudo();
-        }
-      }
+      // Fica na aba atual mostrando o resumo da escolha
+      const btnAtivo = document.querySelector(`.tab[data-key="${tabAtiva}"]`);
+      if (btnAtivo) btnAtivo.classList.add("ativo");
+      renderResumo(tabAtiva);
     }
 
     function renderTudo() {
