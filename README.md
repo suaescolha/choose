@@ -1,2 +1,2 @@
 # choose
-suaescolha.github.com/choose
+suaescolha.github.io/choose
