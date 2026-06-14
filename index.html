@@ -44,18 +44,21 @@
       let tsValor = null;
       let tsNaipe = null;
 
-      onValue(ref(db, "thumper/valor"), (snap) => {
-        const d = snap.val();
-        if (!d || d.ts === tsValor) return;
-        tsValor = d.ts;
-        vibrarN(d.valor);
-      });
+      const canais = {
+        "thumper/valor":  null,
+        "thumper/naipe":  null,
+        "thumper/dado":   null,
+        "thumper/numero": null,
 
-      onValue(ref(db, "thumper/naipe"), (snap) => {
-        const d = snap.val();
-        if (!d || d.ts === tsNaipe) return;
-        tsNaipe = d.ts;
-        vibrarN(d.valor);
+      };
+
+      Object.keys(canais).forEach(canal => {
+        onValue(ref(db, canal), (snap) => {
+          const d = snap.val();
+          if (!d || d.ts === canais[canal]) return;
+          canais[canal] = d.ts;
+          vibrarN(d.valor);
+        });
       });
     }
 
