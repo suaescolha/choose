@@ -165,11 +165,11 @@
       btn.dataset.key = key;
       btn.innerHTML = `<span class="tab-emoji">${emoji}</span><span>${label}</span>`;
       btn.addEventListener("click", () => {
-        if (usadas[key]) return; // bloqueada — ignora clique
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("ativo"));
         btn.classList.add("ativo");
         tabAtiva = key;
-        renderConteudo(key);
+        if (usadas[key]) renderResumo(key); // já escolheu — mostra resumo
+        else renderConteudo(key);
       });
       return btn;
     }
@@ -210,6 +210,21 @@
       msg.style.color = "var(--muted)";
       msg.textContent = "Obrigado pela participação!";
       conteudo.appendChild(msg);
+    }
+
+    function renderResumo(key) {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+
+      const wrap = document.createElement("div");
+      wrap.className = "resumo-wrap";
+
+      const emoji = document.createElement("div");
+      emoji.className = "resumo-emoji";
+      emoji.textContent = escolhas[key] || "?";
+
+      wrap.appendChild(emoji);
+      conteudo.appendChild(wrap);
     }
 
     // ── Roteador de conteúdo ────────────────────────────────────
@@ -418,10 +433,9 @@
     .tab.ativo { background: var(--accent); color: #fff; }
 
     .tab.usada {
-      opacity: .3;
-      cursor: default;
-      pointer-events: none;
-      text-decoration: line-through;
+      opacity: .5;
+      cursor: pointer;
+      pointer-events: auto;
     }
 
     /* Conteúdo */
@@ -498,6 +512,20 @@
       cursor: pointer;
       padding: 4px 0;
       text-align: center;
+    }
+
+    .resumo-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 16px;
+    }
+
+    .resumo-emoji {
+      font-size: 96px;
+      line-height: 1;
+      letter-spacing: .04em;
     }
 
     /* ── RECEPTOR ───────────────────────────────────────────── */
