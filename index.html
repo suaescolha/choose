@@ -130,62 +130,102 @@
       }
     };
 
-    // Estado da escolha de baralho
-    let etapa = "valor"; // "valor" ou "naipe"
+    // Categorias já usadas nesta sessão (reset só com reload)
+    const usadas  = { baralho: false, dado: false, numero: false };
+    // O que foi escolhido em cada categoria (para exibir na tab)
+    const escolhas = { baralho: null, dado: null, numero: null };
+
+    // Tab atualmente visível
+    let tabAtiva = "baralho";
 
     function initEspectador() {
       renderTabs();
     }
 
+    // ── Tabs ────────────────────────────────────────────────────
     function renderTabs() {
       const tabs = document.getElementById("tabs");
       tabs.innerHTML = "";
 
-      // Baralho
-      const btnBaralho = criarTab("🃏", "Baralho", true);
-      btnBaralho.addEventListener("click", () => {
-        ativarTab(btnBaralho);
-        renderBaralho();
-      });
+      const btnBaralho = criarTab("🃏", "Baralho", "baralho", true);
       tabs.appendChild(btnBaralho);
 
-      // Dado + Número
-      Object.entries(OUTRAS).forEach(([key, cat]) => {
-        const btn = criarTab(cat.emoji, cat.label, false);
-        btn.addEventListener("click", () => {
-          ativarTab(btn);
-          renderSimples(cat.itens, "sinal");
-        });
-        tabs.appendChild(btn);
-      });
+      const btnDado = criarTab("🎲", "Dado", "dado", false);
+      tabs.appendChild(btnDado);
 
-      // Renderiza baralho por padrão
-      renderBaralho();
+      const btnNumero = criarTab("🔢", "Número", "numero", false);
+      tabs.appendChild(btnNumero);
+
+      renderConteudo("baralho");
     }
 
-    function criarTab(emoji, label, ativo) {
+    function criarTab(emoji, label, key, ativo) {
       const btn = document.createElement("button");
       btn.className = "tab" + (ativo ? " ativo" : "");
+      btn.dataset.key = key;
       btn.innerHTML = `<span class="tab-emoji">${emoji}</span><span>${label}</span>`;
+      btn.addEventListener("click", () => {
+        if (usadas[key]) return; // bloqueada — ignora clique
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("ativo"));
+        btn.classList.add("ativo");
+        tabAtiva = key;
+        renderConteudo(key);
+      });
       return btn;
     }
 
-    function ativarTab(btn) {
-      document.querySelectorAll(".tab").forEach(t => t.classList.remove("ativo"));
-      btn.classList.add("ativo");
-      // Resetar etapa ao trocar de aba
-      etapa = "valor";
+    function atualizarEstadoTabs() {
+      document.querySelectorAll(".tab").forEach(btn => {
+        const key = btn.dataset.key;
+        if (usadas[key]) {
+          btn.classList.add("usada");
+          btn.classList.remove("ativo");
+          // Mostra o que foi escolhido dentro da tab
+          if (escolhas[key]) {
+            const spanTexto = btn.querySelector("span:last-child");
+            if (spanTexto) spanTexto.textContent = escolhas[key];
+          }
+        }
+      });
+      // Se a tab ativa foi bloqueada, vai pra próxima disponível
+      if (usadas[tabAtiva]) {
+        const proxima = ["baralho","dado","numero"].find(k => !usadas[k]);
+        if (proxima) {
+          tabAtiva = proxima;
+          const btn = document.querySelector(`.tab[data-key="${proxima}"]`);
+          if (btn) btn.classList.add("ativo");
+          renderConteudo(proxima);
+        } else {
+          // Tudo usado
+          renderTudo();
+        }
+      }
     }
 
-    // ── Baralho: fluxo em duas etapas ───────────────────────────
+    function renderTudo() {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+      const msg = document.createElement("p");
+      msg.className = "etapa-titulo";
+      msg.style.color = "var(--muted)";
+      msg.textContent = "Obrigado pela participação!";
+      conteudo.appendChild(msg);
+    }
+
+    // ── Roteador de conteúdo ────────────────────────────────────
+    function renderConteudo(key) {
+      if (key === "baralho") renderBaralho();
+      else if (key === "dado") renderSimples(OUTRAS.dado.itens, "dado");
+      else if (key === "numero") renderSimples(OUTRAS.numero.itens, "numero");
+    }
+
+    // ── Baralho: duas etapas ────────────────────────────────────
     function renderBaralho() {
-      etapa = "valor";
       const conteudo = document.getElementById("conteudo");
       conteudo.innerHTML = "";
 
       const titulo = document.createElement("p");
       titulo.className = "etapa-titulo";
-      titulo.id = "etapa-titulo";
       titulo.textContent = "Qual é o valor da carta?";
       conteudo.appendChild(titulo);
 
@@ -197,27 +237,28 @@
         const btn = document.createElement("button");
         btn.className = "item-btn";
         btn.innerHTML = `<span class="item-emoji">${item.emoji}</span><span class="item-label">${item.label}</span>`;
-        btn.addEventListener("click", () => escolherValor(item));
+        btn.addEventListener("click", (e) => escolherValor(item, e.currentTarget));
         grid.appendChild(btn);
       });
 
       conteudo.appendChild(grid);
     }
 
-    function escolherValor(item) {
-      // Destaca visualmente (seleção), sem texto suspeito
-      document.querySelectorAll("#grid-principal .item-btn").forEach(b => b.classList.remove("selecionado"));
-      event.currentTarget.classList.add("selecionado");
+    function escolherValor(item, btnEl) {
+      // Bloqueia todos os botões imediatamente
+      document.querySelectorAll("#grid-principal .item-btn").forEach(b => {
+        b.style.pointerEvents = "none";
+      });
+      btnEl.classList.add("selecionado");
 
-      // Envia pro Firebase silenciosamente
       set(ref(db, "thumper/valor"), { valor: item.valor, ts: Date.now() });
+      // Guarda label do valor para compor resumo depois
+      escolhas._valorLabel = item.emoji;
 
-      // Após breve pausa, avança para etapa do naipe
-      setTimeout(() => mostrarNaipe(item), 600);
+      setTimeout(() => mostrarNaipe(), 600);
     }
 
-    function mostrarNaipe(valorEscolhido) {
-      etapa = "naipe";
+    function mostrarNaipe() {
       const conteudo = document.getElementById("conteudo");
       conteudo.innerHTML = "";
 
@@ -238,23 +279,22 @@
       });
 
       conteudo.appendChild(grid);
-
-      // Botão discreto para voltar
-      const voltar = document.createElement("button");
-      voltar.className = "btn-voltar";
-      voltar.textContent = "← Voltar";
-      voltar.addEventListener("click", renderBaralho);
-      conteudo.appendChild(voltar);
     }
 
     function escolherNaipe(item, btnEl) {
-      document.querySelectorAll(".grid-naipe .item-btn").forEach(b => b.classList.remove("selecionado"));
+      // Bloqueia todos os naipes imediatamente
+      document.querySelectorAll(".grid-naipe .item-btn").forEach(b => {
+        b.style.pointerEvents = "none";
+      });
       btnEl.classList.add("selecionado");
 
       set(ref(db, "thumper/naipe"), { valor: item.valor, ts: Date.now() });
 
-      // Após confirmação visual, volta ao início discretamente
-      setTimeout(renderBaralho, 1200);
+      // Guarda resumo da escolha para exibir na tab
+      escolhas.baralho = (escolhas._valorLabel || "?") + " " + item.emoji;
+      // Marca baralho como usado e atualiza interface
+      usadas.baralho = true;
+      setTimeout(() => atualizarEstadoTabs(), 800);
     }
 
     // ── Categorias simples (dado, número) ───────────────────────
@@ -269,18 +309,22 @@
 
       const grid = document.createElement("div");
       grid.className = "grid";
+      grid.dataset.canal = canal;
 
       itens.forEach(item => {
         const btn = document.createElement("button");
         btn.className = "item-btn";
         btn.innerHTML = `<span class="item-emoji">${item.emoji}</span><span class="item-label">${item.label}</span>`;
         btn.addEventListener("click", (e) => {
-          document.querySelectorAll(".grid .item-btn").forEach(b => b.classList.remove("selecionado"));
+          // Bloqueia todos imediatamente
+          grid.querySelectorAll(".item-btn").forEach(b => b.style.pointerEvents = "none");
           e.currentTarget.classList.add("selecionado");
-          set(ref(db, "thumper/sinal"), { valor: item.valor, ts: Date.now() });
-          setTimeout(() => {
-            document.querySelectorAll(".grid .item-btn").forEach(b => b.classList.remove("selecionado"));
-          }, 1200);
+
+          set(ref(db, `thumper/${canal}`), { valor: item.valor, ts: Date.now() });
+
+          escolhas[canal] = item.emoji;
+          usadas[canal] = true;
+          setTimeout(() => atualizarEstadoTabs(), 800);
         });
         grid.appendChild(btn);
       });
@@ -373,6 +417,13 @@
     .tab-emoji { font-size: 22px; line-height: 1; }
     .tab.ativo { background: var(--accent); color: #fff; }
 
+    .tab.usada {
+      opacity: .3;
+      cursor: default;
+      pointer-events: none;
+      text-decoration: line-through;
+    }
+
     /* Conteúdo */
     #conteudo {
       width: 100%;
@@ -425,6 +476,7 @@
     .item-btn.selecionado { border-color: var(--ok); background: #0b2218; }
 
     .item-emoji { font-size: 38px; line-height: 1; }
+    .grid[data-canal="dado"] .item-emoji { font-size: 76px; }
     .item-btn.vermelho .item-emoji { color: #f87171; }
 
     /* Naipes maiores */
