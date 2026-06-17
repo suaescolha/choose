@@ -36,6 +36,17 @@
       document.getElementById("app-receptor").style.display   = "flex";
 
       document.getElementById("btn-ativar").addEventListener("click", () => {
+        // Inicializa e desbloqueia o AudioContext no clique (obrigatório no iOS)
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Toca um bipe silencioso só pra desbloquear
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        g.gain.value = 0.001;
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.01);
+
         remove(ref(db, "thumper")).then(() => {
           navigator.vibrate && navigator.vibrate(100);
           document.getElementById("btn-ativar").style.display = "none";
