@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escolha</title>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDwmxuwYu5QJjzm2TpCuyZfFs2ALEYjYIk",
+      authDomain: "mentalismo-de595.firebaseapp.com",
+      databaseURL: "https://mentalismo-de595-default-rtdb.firebaseio.com",
+      projectId: "mentalismo-de595",
+      storageBucket: "mentalismo-de595.firebasestorage.app",
+      messagingSenderId: "301138274418",
+      appId: "1:301138274418:web:6541b0f3347a84d237baeb",
+      measurementId: "G-9MBMSXWNY4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    const params     = new URLSearchParams(location.search);
+    const isReceptor = params.get("modo") === "receptor";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      if (isReceptor) initReceptor();
+      else            initEspectador();
+    });
+
+    function initReceptor() {
+      document.getElementById("app-espectador").style.display = "none";
+      document.getElementById("app-receptor").style.display   = "flex";
+
+      document.getElementById("btn-ativar").addEventListener("click", () => {
+        remove(ref(db, "thumper")).then(() => {
+          navigator.vibrate && navigator.vibrate(100);
+          document.getElementById("btn-ativar").style.display = "none";
+          document.getElementById("receptor-ativo").style.display = "flex";
+
+          document.getElementById("pulso-receptor").style.cssText = "";
+
+          const canais = {
+            "thumper/valor":  null,
+            "thumper/naipe":  null,
+            "thumper/dado":   null,
+            "thumper/numero": null,
+          };
+
+          Object.keys(canais).forEach(canal => {
+            onValue(ref(db, canal), (snap) => {
+              const d = snap.val();
+              if (!d || d.ts === canais[canal]) return;
+              canais[canal] = d.ts;
+              vibrarN(d.valor);
+            });
+          });
+        });
+      });
+    }
+
+    const filaVibracao = [];
+    let vibrandoAgora = false;
+
+    function vibrarN(n) {
+      if (!n || n < 1 || n > 20) return;
+      filaVibracao.push(n);
+      if (!vibrandoAgora) processarFila();
+    }
+
+    // Web Audio API para bipes
+    let audioCtx = null;
+
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    function bipar() {
+      try {
+        const ctx = getAudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.8, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+      } catch(e) {}
+    }
+
+    function processarFila() {
+      if (filaVibracao.length === 0) {
+        vibrandoAgora = false;
+        return;
+      }
+      vibrandoAgora = true;
+      const n = filaVibracao.shift();
+
+      const pulso  = 380;
+      const pausa  = 230;
+      const padrao = [];
+      for (let i = 0; i < n; i++) {
+        padrao.push(pulso);
+        if (i < n - 1) padrao.push(pausa);
+      }
+      navigator.vibrate && navigator.vibrate(padrao);
+
+      // Bipes sincronizados com cada pulso
+      for (let i = 0; i < n; i++) {
+        setTimeout(bipar, i * (pulso + pausa));
+      }
+
+      const total = pulso * n + pausa * (n - 1);
+
+      const pulsoEl = document.getElementById("pulso-receptor");
+      if (pulsoEl) {
+        document.getElementById("contagem").textContent = n;
+        pulsoEl.style.display = "flex";
+        setTimeout(() => { pulsoEl.style.display = "none"; }, total + 300);
+      }
+
+      setTimeout(processarFila, total + 1500);
+    }
+
+    const VALORES = [
+      { label: "Ás",     valor: 1,  emoji: "A"  },
+      { label: "2",      valor: 2,  emoji: "2"  },
+      { label: "3",      valor: 3,  emoji: "3"  },
+      { label: "4",      valor: 4,  emoji: "4"  },
+      { label: "5",      valor: 5,  emoji: "5"  },
+      { label: "6",      valor: 6,  emoji: "6"  },
+      { label: "7",      valor: 7,  emoji: "7"  },
+      { label: "8",      valor: 8,  emoji: "8"  },
+      { label: "9",      valor: 9,  emoji: "9"  },
+      { label: "10",     valor: 10, emoji: "10" },
+      { label: "Valete", valor: 11, emoji: "J"  },
+      { label: "Dama",   valor: 12, emoji: "Q"  },
+      { label: "Rei",    valor: 13, emoji: "K"  },
+    ];
+
+    const NAIPES = [
+      { label: "Paus",    valor: 1, emoji: "♣", vermelho: false },
+      { label: "Espadas", valor: 2, emoji: "♠", vermelho: false },
+      { label: "Copas",   valor: 3, emoji: "♥", vermelho: true  },
+      { label: "Ouros",   valor: 4, emoji: "♦", vermelho: true  },
+    ];
+
+    const OUTRAS = {
+      dado: {
+        label: "Dado", emoji: "🎲",
+        itens: [
+          { label: "1", valor: 1, emoji: "⚀" },
+          { label: "2", valor: 2, emoji: "⚁" },
+          { label: "3", valor: 3, emoji: "⚂" },
+          { label: "4", valor: 4, emoji: "⚃" },
+          { label: "5", valor: 5, emoji: "⚄" },
+          { label: "6", valor: 6, emoji: "⚅" },
+        ]
+      },
+      numero: {
+        label: "Número", emoji: "🔢",
+        itens: Array.from({ length: 10 }, (_, i) => ({
+          label: String(i+1), valor: i+1, emoji: String(i+1)
+        }))
+      }
+    };
+
+    const usadas   = { baralho: false, dado: false, numero: false };
+    const escolhas = { baralho: null, dado: null, numero: null };
+    let tabAtiva = "baralho";
+
+    function initEspectador() {
+      renderTabs();
+    }
+
+    function renderTabs() {
+      const tabs = document.getElementById("tabs");
+      tabs.innerHTML = "";
+      const btnBaralho = criarTab("🃏", "Baralho", "baralho", true);
+      tabs.appendChild(btnBaralho);
+      const btnDado = criarTab("🎲", "Dado", "dado", false);
+      tabs.appendChild(btnDado);
+      const btnNumero = criarTab("🔢", "Número", "numero", false);
+      tabs.appendChild(btnNumero);
+      renderConteudo("baralho");
+    }
+
+    function criarTab(emoji, label, key, ativo) {
+      const btn = document.createElement("button");
+      btn.className = "tab" + (ativo ? " ativo" : "");
+      btn.dataset.key = key;
+      btn.innerHTML = `<span class="tab-emoji">${emoji}</span><span>${label}</span>`;
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("ativo"));
+        btn.classList.add("ativo");
+        tabAtiva = key;
+        if (usadas[key]) renderResumo(key);
+        else renderConteudo(key);
+      });
+      return btn;
+    }
+
+    function atualizarEstadoTabs() {
+      document.querySelectorAll(".tab").forEach(btn => {
+        const key = btn.dataset.key;
+        if (usadas[key]) {
+          btn.classList.add("usada");
+          if (escolhas[key]) {
+            const spanTexto = btn.querySelector("span:last-child");
+            if (spanTexto) spanTexto.textContent = escolhas[key];
+          }
+        }
+      });
+      const btnAtivo = document.querySelector(`.tab[data-key="${tabAtiva}"]`);
+      if (btnAtivo) btnAtivo.classList.add("ativo");
+      renderResumo(tabAtiva);
+    }
+
+    function renderTudo() {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+      const msg = document.createElement("p");
+      msg.className = "etapa-titulo";
+      msg.style.color = "var(--muted)";
+      msg.textContent = "Obrigado pela participação!";
+      conteudo.appendChild(msg);
+    }
+
+    function renderResumo(key) {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "resumo-wrap";
+      const emoji = document.createElement("div");
+      emoji.className = "resumo-emoji";
+      emoji.textContent = escolhas[key] || "?";
+      wrap.appendChild(emoji);
+      conteudo.appendChild(wrap);
+    }
+
+    function renderConteudo(key) {
+      if (key === "baralho") renderBaralho();
+      else if (key === "dado") renderSimples(OUTRAS.dado.itens, "dado");
+      else if (key === "numero") renderSimples(OUTRAS.numero.itens, "numero");
+    }
+
+    function renderBaralho() {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+      const titulo = document.createElement("p");
+      titulo.className = "etapa-titulo";
+      titulo.textContent = "Qual é o valor da carta?";
+      conteudo.appendChild(titulo);
+      const grid = document.createElement("div");
+      grid.className = "grid";
+      grid.id = "grid-principal";
+      VALORES.forEach(item => {
+        const btn = document.createElement("button");
+        btn.className = "item-btn";
+        btn.innerHTML = `<span class="item-emoji">${item.emoji}</span><span class="item-label">${item.label}</span>`;
+        btn.addEventListener("click", (e) => escolherValor(item, e.currentTarget));
+        grid.appendChild(btn);
+      });
+      conteudo.appendChild(grid);
+    }
+
+    function escolherValor(item, btnEl) {
+      document.querySelectorAll("#grid-principal .item-btn").forEach(b => {
+        b.style.pointerEvents = "none";
+      });
+      btnEl.classList.add("selecionado");
+      set(ref(db, "thumper/valor"), { valor: item.valor, ts: Date.now() });
+      escolhas._valorLabel = item.emoji;
+      setTimeout(() => mostrarNaipe(), 600);
+    }
+
+    function mostrarNaipe() {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+      const titulo = document.createElement("p");
+      titulo.className = "etapa-titulo";
+      titulo.textContent = "Qual é o naipe?";
+      conteudo.appendChild(titulo);
+      const grid = document.createElement("div");
+      grid.className = "grid grid-naipe";
+      NAIPES.forEach(item => {
+        const btn = document.createElement("button");
+        btn.className = "item-btn" + (item.vermelho ? " vermelho" : "");
+        btn.innerHTML = `<span class="item-emoji">${item.emoji}</span><span class="item-label">${item.label}</span>`;
+        btn.addEventListener("click", (e) => escolherNaipe(item, e.currentTarget));
+        grid.appendChild(btn);
+      });
+      conteudo.appendChild(grid);
+    }
+
+    function escolherNaipe(item, btnEl) {
+      document.querySelectorAll(".grid-naipe .item-btn").forEach(b => {
+        b.style.pointerEvents = "none";
+      });
+      btnEl.classList.add("selecionado");
+      set(ref(db, "thumper/naipe"), { valor: item.valor, ts: Date.now() });
+      escolhas.baralho = (escolhas._valorLabel || "?") + " " + item.emoji;
+      usadas.baralho = true;
+      setTimeout(() => atualizarEstadoTabs(), 800);
+    }
+
+    function renderSimples(itens, canal) {
+      const conteudo = document.getElementById("conteudo");
+      conteudo.innerHTML = "";
+      const titulo = document.createElement("p");
+      titulo.className = "etapa-titulo";
+      titulo.textContent = "Faça sua escolha";
+      conteudo.appendChild(titulo);
+      const grid = document.createElement("div");
+      grid.className = "grid";
+      grid.dataset.canal = canal;
+      itens.forEach(item => {
+        const btn = document.createElement("button");
+        btn.className = "item-btn";
+        btn.innerHTML = `<span class="item-emoji">${item.emoji}</span><span class="item-label">${item.label}</span>`;
+        btn.addEventListener("click", (e) => {
+          grid.querySelectorAll(".item-btn").forEach(b => b.style.pointerEvents = "none");
+          e.currentTarget.classList.add("selecionado");
+          set(ref(db, `thumper/${canal}`), { valor: item.valor, ts: Date.now() });
+          escolhas[canal] = item.emoji;
+          usadas[canal] = true;
+          setTimeout(() => atualizarEstadoTabs(), 800);
+        });
+        grid.appendChild(btn);
+      });
+      conteudo.appendChild(grid);
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0c0c12;
+      --surface: #14141e;
+      --border:  #1f1f30;
+      --accent:  #6d28d9;
+      --accent2: #a78bfa;
+      --pulse:   #c4b5fd;
+      --text:    #ede8ff;
+      --muted:   #6b6585;
+      --ok:      #34d399;
+      --r:       14px;
+      --font:    'Inter', system-ui, sans-serif;
+    }
+
+    html, body {
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app-espectador {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 48px;
+      gap: 22px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    header { text-align: center; }
+
+    h1 {
+      font-size: clamp(26px, 6vw, 36px);
+      font-weight: 700;
+      letter-spacing: -.025em;
+    }
+
+    .sub {
+      margin-top: 6px;
+      font-size: 15px;
+      color: var(--muted);
+    }
+
+    #tabs {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 6px;
+    }
+
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px 4px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background .18s, color .18s;
+      font-family: var(--font);
+    }
+
+    .tab-emoji { font-size: 22px; line-height: 1; }
+    .tab.ativo { background: var(--accent); color: #fff; }
+
+    .tab.usada {
+      opacity: .5;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+
+    #conteudo {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .etapa-titulo {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: center;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+      gap: 10px;
+    }
+
+    .grid-naipe {
+      grid-template-columns: repeat(2, 1fr);
+      max-width: 340px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .item-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      font-family: var(--font);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 8px 16px;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color .18s, background .18s, transform .1s;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 96px;
+    }
+
+    .item-btn:active  { transform: scale(.91); }
+    .item-btn.selecionado { border-color: var(--ok); background: #0b2218; }
+
+    .item-emoji { font-size: 38px; line-height: 1; }
+    .grid[data-canal="dado"] .item-emoji { font-size: 76px; }
+    .item-btn.vermelho .item-emoji { color: #f87171; }
+
+    .grid-naipe .item-btn { min-height: 120px; padding: 24px 12px 18px; }
+    .grid-naipe .item-emoji { font-size: 52px; }
+
+    .item-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .btn-voltar {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-family: var(--font);
+      cursor: pointer;
+      padding: 4px 0;
+      text-align: center;
+    }
+
+    .resumo-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 16px;
+    }
+
+    .resumo-emoji {
+      font-size: 96px;
+      line-height: 1;
+      letter-spacing: .04em;
+    }
+
+    #app-receptor {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      gap: 28px;
+    }
+
+    #btn-ativar {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 18px;
+      font-weight: 600;
+      padding: 20px 48px;
+      border-radius: 16px;
+      cursor: pointer;
+      letter-spacing: .04em;
+      box-shadow: 0 0 32px rgba(109,40,217,.5);
+      transition: transform .1s, box-shadow .2s;
+    }
+
+    #btn-ativar:active { transform: scale(.95); }
+
+    .orb {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 32%, var(--accent2), var(--accent) 60%, #2e1065);
+      box-shadow: 0 0 48px 10px rgba(109,40,217,.4);
+      animation: breathe 3.2s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%,100% { transform: scale(1);    box-shadow: 0 0 48px 10px rgba(109,40,217,.4); }
+      50%      { transform: scale(1.08); box-shadow: 0 0 72px 20px rgba(109,40,217,.55); }
+    }
+
+    .orb-label {
+      font-size: 12px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #pulso-receptor {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: transparent;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      animation: flash .3s ease-out;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    @keyframes flash {
+      0%   { background: rgba(109,40,217,.3); }
+      100% { background: rgba(109,40,217,.05); }
+    }
+
+    #contagem {
+      font-size: 120px;
+      font-weight: 700;
+      letter-spacing: -.04em;
+      color: var(--pulse);
+      line-height: 1;
+      text-shadow: 0 0 50px var(--accent2);
+    }
+
+    .pulso-label {
+      font-size: 15px;
+      color: var(--muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ESPECTADOR -->
+  <div id="app-espectador">
+    <header>
+      <h1>Faça sua escolha</h1>
+      <p class="sub">Toque no item desejado</p>
+    </header>
+    <div id="tabs"></div>
+    <div id="conteudo"></div>
+  </div>
+
+  <!-- RECEPTOR -->
+  <div id="app-receptor">
+    <button id="btn-ativar">Ativar</button>
+    <div id="receptor-ativo" style="display:none; flex-direction:column; align-items:center; gap:28px;">
+      <div class="orb"></div>
+      <p class="orb-label">Aguardando</p>
+    </div>
+    <div id="pulso-receptor" style="display:none!important">
+      <div id="contagem">–</div>
+      <p class="pulso-label">pulsos</p>
+    </div>
+  </div>
+
+</body>
+</html>
